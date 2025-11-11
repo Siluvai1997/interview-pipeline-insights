@@ -1,0 +1,41 @@
+
+name: Demo CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-simulate-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint (basic)
+        run: |
+          python -m pyflakes app.py || true
+
+      - name: Run smoke test
+        run: |
+          python - << 'PY'
+          import pandas as pd
+          df = pd.read_csv('data/candidate_data.csv')
+          assert not df.empty, "Dataset should not be empty"
+          print("Smoke test passed: dataset loaded.")
+          PY
+
+      - name: Simulate deploy to Streamlit Cloud
+        run: |
+          echo "This project deploys via Streamlit Cloud UI (GitHub → Streamlit)."
+          echo "Push to main will trigger Streamlit to rebuild automatically."

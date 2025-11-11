@@ -1,0 +1,10 @@
+DevOps Engineer (Sample JD)
+
+We are seeking a DevOps Engineer skilled in:
+- Cloud: AWS or Azure
+- Containers & Orchestration: Docker, Kubernetes
+- Infrastructure as Code: Terraform, Ansible
+- CI/CD: GitHub Actions or Jenkins
+- Scripting: Python or Bash
+- Monitoring: Prometheus, Grafana
+Nice to have: Security basics, Linux administration, Networking fundamentals.

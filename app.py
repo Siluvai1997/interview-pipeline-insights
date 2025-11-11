@@ -44,21 +44,45 @@ with tab1:
     wk = weekly_trends(df)
     st.plotly_chart(px.line(wk, x="Applied_Date", y="applications", markers=True), use_container_width=True)
 
-    st.write("### Stage Flow (Sankey)")
-    stages = ["Applied","Screening","Interview","Offer","Hired","Rejected"]
+    st.write("### Candidate Journey Flow")
+    st.caption("Visualizes how candidates move through each hiring stage — from application to final outcomes like Hired or Rejected.")
+    stages = ["Applied", "Screening", "Interview", "Offer", "Hired", "Rejected"]
     counts = df["Stage"].value_counts().reindex(stages, fill_value=0).tolist()
-    labels = stages
-    source = [0,1,2,3,3]
-    target = [1,2,3,4,5]
-    scr = counts[1] if counts[0] > 0 else 0
-    intv = counts[2] if counts[1] > 0 else 0
-    offr = counts[3] if counts[2] > 0 else 0
-    hired = counts[4]
-    rej = counts[5] if counts[3] > 0 else 0
-    values = [scr, intv, offr, hired, rej]
-    sankey_fig = go.Figure(data=[go.Sankey(node=dict(label=labels, pad=20, thickness=15), link=dict(source=source, target=target, value=values))])
-    st.plotly_chart(sankey_fig, use_container_width=True)
 
+    labels = stages
+    source = [0, 1, 2, 3, 3]
+    target = [1, 2, 3, 4, 5]
+
+    values = [
+        counts[1],
+        counts[2],
+        counts[3],
+        counts[4],
+        counts[5],
+       ]
+    node_colors = ["#6AAED6", "#A2C8E6", "#D6B3E6", "#F2B5A8", "#A8E6A3", "#E6D1A3"]
+    sankey_fig = go.Figure(
+      data=[
+        go.Sankey(
+            node=dict(
+                label=labels,
+                pad=25,
+                thickness=20,
+                color=node_colors,
+                line=dict(color="gray", width=0.5),
+                hovertemplate='%{label}<extra></extra>',
+            ),
+            link=dict(source=source, target=target, value=values, color="lightgray"),
+        )
+        ]
+    )
+
+    sankey_fig.update_layout(
+    font=dict(size=14, color="#2F2F2F"),
+    height=450,
+     )
+
+    st.plotly_chart(sankey_fig, use_container_width=True)
     st.write("### Export")
     if st.button("📄 Download PDF Summary", type="primary"):
         pdf_path = "pipeline_summary.pdf"

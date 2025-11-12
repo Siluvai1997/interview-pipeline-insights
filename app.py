@@ -119,7 +119,7 @@ with tab3:
     st.dataframe(eff, use_container_width=True)
 
 with tab4:
-    st.subheader("Skills Analyzer (Simple Keyword Overlap)")
+    st.subheader("Skills Analyzer")
     jd_text = jd_path.read_text() if jd_path.exists() else ""
     jd_text = st.text_area("Job Description (editable)", jd_text, height=220)
     pick = st.multiselect("Candidates", df["Candidate"].tolist(), default=df["Candidate"].head(10).tolist())

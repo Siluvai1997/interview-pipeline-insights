@@ -1,72 +1,92 @@
-
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import cm
-from datetime import datetime
 import matplotlib.pyplot as plt
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
 
-def _chart_stage_counts(stage_counts, out_png_path: str):
-    labels = list(stage_counts.index)
-    values = list(stage_counts.values)
-    plt.figure()
-    plt.bar(labels, values)
-    plt.xlabel("Stage")
-    plt.ylabel("Count")
-    plt.title("Candidates by Stage")
+def generate_pdf_report(df, kpis):
+    """Generate an enhanced PDF summary report for Hiring Insights Hub."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=30, bottomMargin=30)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Title and timestamp
+    elements.append(Paragraph("<b>Hiring Insights Hub — Summary Report</b>", styles["Title"]))
+    elements.append(Paragraph(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    # KPIs
+    elements.append(Paragraph("<b>Key Metrics</b>", styles["Heading2"]))
+    elements.append(Paragraph(f"Total Candidates: {kpis['total']}", styles["Normal"]))
+    elements.append(Paragraph(f"Avg. Time to Hire (days): {round(kpis['avg_time_to_hire_days'], 1)}", styles["Normal"]))
+    elements.append(Paragraph(f"Conversion (Offer+Hired / All): {round(kpis['conversion_pct'], 2)}%", styles["Normal"]))
+    elements.append(Spacer(1, 16))
+
+    # Candidates by Stage Chart (with numeric labels)
+    fig, ax = plt.subplots(figsize=(4, 3))
+    stage_counts = df["Stage"].value_counts().sort_index()
+    ax.bar(stage_counts.index, stage_counts.values, color="#1f77b4")
+    ax.set_title("Candidates by Stage")
+    ax.set_xlabel("Stage")
+    ax.set_ylabel("Count")
+
+    for i, v in enumerate(stage_counts.values):
+        ax.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=8, fontweight='bold')
+
     plt.tight_layout()
-    plt.savefig(out_png_path)
-    plt.close()
+    img_stage = BytesIO()
+    plt.savefig(img_stage, format='png', bbox_inches='tight')
+    plt.close(fig)
+    img_stage.seek(0)
+    elements.append(Paragraph("<b>Candidates by Stage</b>", styles["Heading2"]))
+    elements.append(Image(img_stage, width=250, height=200))
+    elements.append(Spacer(1, 12))
 
-def generate_pdf_report(pdf_path: str, kpis: dict, stage_counts, stuck_df):
-    chart_path = pdf_path.replace(".pdf", "_stage_chart.png")
-    _chart_stage_counts(stage_counts, chart_path)
+    # Candidates by Source Chart
+    fig, ax = plt.subplots(figsize=(4, 3))
+    source_counts = df["Source"].value_counts().sort_index()
+    ax.bar(source_counts.index, source_counts.values, color="#2ca02c")
+    ax.set_title("Candidates by Source")
+    ax.set_xlabel("Source")
+    ax.set_ylabel("Count")
 
-    c = canvas.Canvas(pdf_path, pagesize=A4)
-    width, height = A4
-    x_margin, y_margin = 2*cm, 2*cm
-    y = height - y_margin
+    for i, v in enumerate(source_counts.values):
+        ax.text(i, v + 0.5, str(v), ha='center', va='bottom', fontsize=8, fontweight='bold')
 
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(x_margin, y, "Interview Pipeline Insights — Summary Report")
-    y -= 1.0*cm
+    plt.tight_layout()
+    img_source = BytesIO()
+    plt.savefig(img_source, format='png', bbox_inches='tight')
+    plt.close(fig)
+    img_source.seek(0)
+    elements.append(Paragraph("<b>Candidates by Source</b>", styles["Heading2"]))
+    elements.append(Image(img_source, width=250, height=200))
+    elements.append(Spacer(1, 12))
 
-    c.setFont("Helvetica", 10)
-    c.drawString(x_margin, y, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    y -= 1.0*cm
+    # Stage vs Source summary table
+    pivot_table = df.pivot_table(index="Source", columns="Stage", aggfunc="size", fill_value=0)
+    data = [ ["Source"] + list(pivot_table.columns) ] + [ [src] + list(pivot_table.loc[src]) for src in pivot_table.index ]
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER")
+    ]))
+    elements.append(Paragraph("<b>Stage Breakdown by Source</b>", styles["Heading2"]))
+    elements.append(table)
+    elements.append(Spacer(1, 16))
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(x_margin, y, "Key Metrics")
-    y -= 0.6*cm
-    c.setFont("Helvetica", 11)
-    c.drawString(x_margin, y, f"Total Candidates: {kpis.get('total', 0)}")
-    y -= 0.5*cm
-    c.drawString(x_margin, y, f"Avg. Time to Hire (days): {kpis.get('avg_time_to_hire_days') or 0}")
-    y -= 0.5*cm
-    c.drawString(x_margin, y, f"Conversion (Offer+Hired / All): {kpis.get('conversion_pct') or 0}%")
-    y -= 1.0*cm
+    # Bottleneck candidates summary
+    elements.append(Paragraph("<b>Bottlenecks (stuck candidates)</b>", styles["Heading2"]))
+    stuck_candidates = df.sort_values(by="Last_Updated").head(10)
+    for _, row in stuck_candidates.iterrows():
+        line = f"- {row['Candidate']} ({row['Role']}), Stage: {row['Stage']}, Source: {row['Source']}, Last Updated: {row['Last_Updated']}, Applied: {row['Applied_Date']}"
+        elements.append(Paragraph(line, styles["Normal"]))
+    elements.append(Spacer(1, 12))
 
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(x_margin, y, "Candidates by Stage")
-    y -= 0.5*cm
-    chart_w = 12*cm
-    chart_h = 6*cm
-    c.drawImage(chart_path, x_margin, y - chart_h, width=chart_w, height=chart_h, preserveAspectRatio=True, mask='auto')
-    y -= chart_h + 0.8*cm
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(x_margin, y, "Bottlenecks (stuck candidates)")
-    y -= 0.6*cm
-    c.setFont("Helvetica", 10)
-    if stuck_df is None or stuck_df.empty:
-        c.drawString(x_margin, y, "None detected for the selected threshold.")
-        y -= 0.5*cm
-    else:
-        max_items = 12
-        for _, row in stuck_df.head(max_items).iterrows():
-            line = f"- {row['Candidate']} ({row['Role']}), Stage: {row['Stage']}, Last Updated: {row['Last_Updated'].date()}, Applied: {row['Applied_Date'].date()}"
-            c.drawString(x_margin, y, line)
-            y -= 0.45*cm
-
-    c.setFont("Helvetica-Oblique", 9)
-    c.drawString(x_margin, y_margin, "Generated by Interview Pipeline Insights (Streamlit + Python)")
-    c.save()
+    # Build and return file
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
